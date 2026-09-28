@@ -314,4 +314,53 @@ class ClientTest {
             server.stop(0);
         }
     }
+
+    @Test
+    void joinUrl() {
+        // Regression test for a real bug: Client.call used URI.resolve (RFC 3986 relative
+        // reference resolution), which replaces the last path segment of a base_url that
+        // doesn't end in "/" instead of appending under it - so "https://api.example.com/v1"
+        // silently lost its "v1". The spec (https://webfunction.org/package#url-composition)
+        // calls for plain string normalization instead: append the name directly if base_url
+        // ends in "/", otherwise insert a single "/".
+        String[][] cases = {
+                {"https://api.example.com", "list-people", "https://api.example.com/list-people"},
+                {"https://api.example.com/", "list-people", "https://api.example.com/list-people"},
+                {"https://api.example.com/v1", "list-people", "https://api.example.com/v1/list-people"},
+                {"https://api.example.com/v1/", "list-people", "https://api.example.com/v1/list-people"},
+                {"https://api.example.com/v1/merchants", "list-people", "https://api.example.com/v1/merchants/list-people"},
+        };
+        for (String[] c : cases) {
+            assertEquals(c[2], Client.joinUrl(c[0], c[1]), "joinUrl(" + c[0] + ", " + c[1] + ")");
+        }
+    }
+
+    @Test
+    void callPreservesBaseUrlPath() throws IOException {
+        // End-to-end version of joinUrl(): a real server, and base_urls with a path
+        // segment (with and without a trailing slash). The other tests here all use a
+        // bare-host base_url with a trailing slash, which is why the bug went unnoticed.
+        HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        String[] baseUrlHolder = new String[1];
+        List<String> requestedPaths = new java.util.concurrent.CopyOnWriteArrayList<>();
+
+        server.createContext("/package", ex -> writeJson(ex, 200, Map.of(
+                "base_url", baseUrlHolder[0],
+                "endpoints", List.of(Map.of("name", "ping", "returns", "boolean", "arguments", List.of())))));
+        server.createContext("/", ex -> {
+            requestedPaths.add(ex.getRequestURI().getPath());
+            writeJson(ex, 200, true);
+        });
+        server.start();
+        try {
+            String origin = "http://127.0.0.1:" + server.getAddress().getPort();
+            for (String basePath : List.of("/v1", "/v1/", "/v1/merchants")) {
+                baseUrlHolder[0] = origin + basePath;
+                Client.fromPackageEndpoint(origin + "/package", new Options()).call("ping", Map.of());
+            }
+            assertEquals(List.of("/v1/ping", "/v1/ping", "/v1/merchants/ping"), requestedPaths);
+        } finally {
+            server.stop(0);
+        }
+    }
 }

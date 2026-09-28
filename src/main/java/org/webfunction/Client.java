@@ -8,6 +8,7 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * Wraps a {@link Package} and provides a way to invoke its endpoints.
@@ -157,7 +158,7 @@ public final class Client {
      */
     public Object call(String name, Map<String, Object> args) {
         String dashed = name.replace('_', '-');
-        String endpointUrl = URI.create(baseUrl).resolve(dashed).toString();
+        String endpointUrl = joinUrl(baseUrl, dashed);
 
         Endpoint endpoint = pkg.endpoint(dashed).orElse(null);
 
@@ -173,5 +174,28 @@ public final class Client {
         }
 
         return result;
+    }
+
+    /**
+     * Joins a package's base URL with an endpoint name, per
+     * https://webfunction.org/package#url-composition: if {@code baseUrl}
+     * ends in "/", the name is appended directly; otherwise a single "/"
+     * is inserted. This is plain string-level normalization, NOT RFC 3986
+     * relative reference resolution.
+     *
+     * <p>An earlier version used {@code URI.resolve}, which was a real
+     * bug: RFC 3986 resolution treats the last path segment of a base URL
+     * that doesn't end in "/" as replaceable, so resolving "list-people"
+     * against "https://api.example.com/v1" silently dropped "v1" and
+     * produced "https://api.example.com/list-people" instead of
+     * "https://api.example.com/v1/list-people". The spec's rule has no
+     * such failure mode, so a base_url works with or without a trailing
+     * slash.
+     */
+    static String joinUrl(String baseUrl, String endpointName) {
+        // Fail loudly on a package with no base_url, as URI.create(null) did,
+        // rather than silently producing "null/<name>".
+        Objects.requireNonNull(baseUrl, "package has no base_url");
+        return baseUrl.endsWith("/") ? baseUrl + endpointName : baseUrl + "/" + endpointName;
     }
 }
