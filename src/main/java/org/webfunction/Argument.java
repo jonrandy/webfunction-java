@@ -64,4 +64,9 @@ public record Argument(String name, Type type, String group, List<Object> choice
     public boolean optional() {
         return !required();
     }
+
+    /** Reports whether the argument is internal-only. */
+    public boolean isPrivate() {
+        return flags.contains("private");
+    }
 }

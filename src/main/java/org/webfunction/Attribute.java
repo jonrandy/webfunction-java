@@ -44,4 +44,9 @@ public record Attribute(String name, Type type, List<Object> values, List<String
     public boolean nullable() {
         return flags.contains("nullable");
     }
+
+    /** Reports whether the attribute is internal-only. */
+    public boolean isPrivate() {
+        return flags.contains("private");
+    }
 }
