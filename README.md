@@ -104,6 +104,17 @@ already-decoded value) - replicating that in Java would need
 reflection-heavy navigation of a decoded `Object` value, and wasn't
 implemented. Call `value()` or `resolve()` to get the real value.
 
+## Generics
+
+A generic object (an object definition using the type parameter `T`) is applied
+to a type as `{ "object.list": "object.user" }`. `Type` represents that as an
+alternative with base `object`, refinement `list` and `arg()` set, printing as
+`object.list<object.user>`; `objectNames()` includes both names. The library
+doesn't resolve generics itself, and never fails on them: an unresolved `T`
+reads as `any` (`TypeAlt.param()` is true, for tooling that wants to tell it
+from a literal `any`), and a malformed application becomes `any` with the
+reason in `TypeAlt.malformed()`.
+
 ## Known gaps / open questions
 
 - **Events**: an earlier Go model (in the wfn CLI's own `webfunction/`

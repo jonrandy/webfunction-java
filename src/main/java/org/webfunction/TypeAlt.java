@@ -16,8 +16,36 @@ package org.webfunction;
  *                   equals "array" and the wire form was a nested array
  *                   (e.g. {@code [["string"]]} means "array of string").
  *                   {@code null} for a bare "array" entry (array of any).
+ * @param arg        the type argument when this alternative is a generic
+ *                   object applied to a type: {@code { "object.list":
+ *                   "object.user" }} has base "object", refinement "list"
+ *                   and arg "object.user". {@code null} otherwise.
+ * @param malformed  one of the {@code MALFORMED_*} reasons when this
+ *                   alternative stands in for an invalid generic
+ *                   application (parsed as a bare "any" so clients never
+ *                   fail on one), so validation tooling can still report
+ *                   it. {@code null} for every well-formed alternative.
+ * @param param      true for the generic type parameter token "T". An
+ *                   unresolved parameter is "any" to every consumer (base
+ *                   is "any", so it accepts any value, as the spec's
+ *                   runtime fallback requires); this only lets tooling
+ *                   that expands generics tell it from a literal "any".
  */
-public record TypeAlt(String base, String refinement, Type of) {
+public record TypeAlt(String base, String refinement, Type of, Type arg, String malformed, boolean param) {
+
+    /** {@link #malformed()} reason: an application object did not have exactly one key. */
+    public static final String MALFORMED_KEY_COUNT = "key-count";
+
+    /** {@link #malformed()} reason: the application object's key was not "object.&lt;name&gt;". */
+    public static final String MALFORMED_KEY_PREFIX = "key-prefix";
+
+    /** {@link #malformed()} reason: the application's value was not a valid type. */
+    public static final String MALFORMED_ARGUMENT = "argument";
+
+    /** A plain alternative: no type argument, well formed, not a type parameter. */
+    public TypeAlt(String base, String refinement, Type of) {
+        this(base, refinement, of, null, null, false);
+    }
 
     /**
      * Reports whether this alternative is a reference to a named object
@@ -52,6 +80,9 @@ public record TypeAlt(String base, String refinement, Type of) {
                 }
                 if ("array".equals(base) && of != null) {
                     sb.append('<').append(of.format(style)).append('>');
+                }
+                if (arg != null) {
+                    sb.append('<').append(arg.format(style)).append('>');
                 }
                 yield sb.toString();
             }
