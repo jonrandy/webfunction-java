@@ -74,6 +74,9 @@ public final class Type {
             if (alt.of() != null) {
                 names.addAll(alt.of().objectNames());
             }
+            if (alt.arg() != null) {
+                names.addAll(alt.arg().objectNames());
+            }
         }
         return names;
     }
@@ -207,8 +210,10 @@ public final class Type {
     /**
      * Parses the recursive type grammar: a JSON null (treated as "any" -
      * only actually expected for choices/values elements, not type
-     * fields themselves, but handled defensively), a bare string, or a
-     * JSON array whose entries are either strings or nested arrays.
+     * fields themselves, but handled defensively), a bare string, a
+     * generic application object ({@code { "object.<name>": <type> }}),
+     * or a JSON array whose entries are strings, nested arrays or
+     * application objects.
      */
     static final class Deserializer extends StdDeserializer<Type> {
         Deserializer() {
@@ -228,6 +233,9 @@ public final class Type {
             if (node.isTextual()) {
                 return new Type(List.of(parseString(node.asText())));
             }
+            if (node.isObject()) {
+                return new Type(List.of(parseApplication(node)));
+            }
             if (node.isArray()) {
                 if (node.isEmpty()) {
                     // Not permitted per spec ("Arrays MUST NOT be empty at
@@ -241,6 +249,8 @@ public final class Type {
                         alts.add(parseString(entry.asText()));
                     } else if (entry.isArray()) {
                         alts.add(new TypeAlt("array", null, parse(entry)));
+                    } else if (entry.isObject()) {
+                        alts.add(parseApplication(entry));
                     } else {
                         throw new IllegalArgumentException("unexpected type entry: " + entry.getNodeType());
                     }
@@ -250,9 +260,37 @@ public final class Type {
             throw new IllegalArgumentException("unexpected type value: " + node.getNodeType());
         }
 
+        /**
+         * Parses a generic application, {@code { "object.<name>": <type> }}.
+         * Anything that is not exactly that shape resolves to a bare "any"
+         * carrying the reason, rather than an error, so a package using
+         * generics (even incorrectly) still loads.
+         */
+        private static TypeAlt parseApplication(JsonNode node) {
+            if (node.size() != 1) {
+                return malformed(TypeAlt.MALFORMED_KEY_COUNT);
+            }
+            String key = node.fieldNames().next();
+            if (!key.startsWith("object.") || key.equals("object.")) {
+                return malformed(TypeAlt.MALFORMED_KEY_PREFIX);
+            }
+            try {
+                return new TypeAlt("object", key.substring("object.".length()), null, parse(node.get(key)), null, false);
+            } catch (IllegalArgumentException e) {
+                return malformed(TypeAlt.MALFORMED_ARGUMENT);
+            }
+        }
+
+        private static TypeAlt malformed(String reason) {
+            return new TypeAlt("any", null, null, null, reason, false);
+        }
+
         private static TypeAlt parseString(String s) {
             if (s.equals("array")) {
                 return new TypeAlt("array", null, null);
+            }
+            if (s.equals("T")) {
+                return new TypeAlt("any", null, null, null, null, true);
             }
             int dot = s.indexOf('.');
             if (dot >= 0) {
