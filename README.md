@@ -109,7 +109,10 @@ implemented. Call `value()` or `resolve()` to get the real value.
 A generic object (an object definition using the type parameter `T`) is applied
 to a type as `{ "object.list": "object.user" }`. `Type` represents that as an
 alternative with base `object`, refinement `list` and `arg()` set, printing as
-`object.list<object.user>`; `objectNames()` includes both names. The library
+`object.list<object.user>`; `objectNames()` includes both names. An array of a
+type can be written `{ "array": "object.user" }`, which is the same as
+`[["object.user"]]` (an array alternative with `of()` set, printing as
+`array<object.user>`); a union of one entry is that entry. The library
 doesn't resolve generics itself, and never fails on them: an unresolved `T`
 reads as `any` (`TypeAlt.param()` is true, for tooling that wants to tell it
 from a literal `any`), and a malformed application becomes `any` with the

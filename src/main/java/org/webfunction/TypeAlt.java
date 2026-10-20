@@ -14,7 +14,9 @@ package org.webfunction;
  *                   when there's no refinement.
  * @param of         the element type, present only when {@code base}
  *                   equals "array" and the wire form was a nested array
- *                   (e.g. {@code [["string"]]} means "array of string").
+ *                   (e.g. {@code [["string"]]} means "array of string") or
+ *                   an array application ({@code { "array": "string" }},
+ *                   which parses to exactly the same value).
  *                   {@code null} for a bare "array" entry (array of any).
  * @param arg        the type argument when this alternative is a generic
  *                   object applied to a type: {@code { "object.list":
@@ -36,7 +38,7 @@ public record TypeAlt(String base, String refinement, Type of, Type arg, String 
     /** {@link #malformed()} reason: an application object did not have exactly one key. */
     public static final String MALFORMED_KEY_COUNT = "key-count";
 
-    /** {@link #malformed()} reason: the application object's key was not "object.&lt;name&gt;". */
+    /** {@link #malformed()} reason: the application object's key was neither "object.&lt;name&gt;" nor "array". */
     public static final String MALFORMED_KEY_PREFIX = "key-prefix";
 
     /** {@link #malformed()} reason: the application's value was not a valid type. */
