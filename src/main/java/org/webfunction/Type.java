@@ -210,10 +210,10 @@ public final class Type {
     /**
      * Parses the recursive type grammar: a JSON null (treated as "any" -
      * only actually expected for choices/values elements, not type
-     * fields themselves, but handled defensively), a bare string, a
-     * generic application object ({@code { "object.<name>": <type> }}),
-     * or a JSON array whose entries are strings, nested arrays or
-     * application objects.
+     * fields themselves, but handled defensively), a bare string, an
+     * application object ({@code { "object.<name>": <type> }} or
+     * {@code { "array": <type> }}), or a JSON array whose entries are
+     * strings, nested arrays or application objects.
      */
     static final class Deserializer extends StdDeserializer<Type> {
         Deserializer() {
@@ -261,16 +261,25 @@ public final class Type {
         }
 
         /**
-         * Parses a generic application, {@code { "object.<name>": <type> }}.
-         * Anything that is not exactly that shape resolves to a bare "any"
-         * carrying the reason, rather than an error, so a package using
-         * generics (even incorrectly) still loads.
+         * Parses a type application: a generic object applied to a type,
+         * {@code { "object.<name>": <type> }}, or an array of a type,
+         * {@code { "array": <type> }} (the same as {@code [[<type>]]}).
+         * Anything that is not exactly one of those shapes resolves to a
+         * bare "any" carrying the reason, rather than an error, so a
+         * package using generics (even incorrectly) still loads.
          */
         private static TypeAlt parseApplication(JsonNode node) {
             if (node.size() != 1) {
                 return malformed(TypeAlt.MALFORMED_KEY_COUNT);
             }
             String key = node.fieldNames().next();
+            if (key.equals("array")) {
+                try {
+                    return new TypeAlt("array", null, parse(node.get(key)));
+                } catch (IllegalArgumentException e) {
+                    return malformed(TypeAlt.MALFORMED_ARGUMENT);
+                }
+            }
             if (!key.startsWith("object.") || key.equals("object.")) {
                 return malformed(TypeAlt.MALFORMED_KEY_PREFIX);
             }

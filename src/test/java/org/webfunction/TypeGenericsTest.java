@@ -147,4 +147,148 @@ class TypeGenericsTest {
         assertEquals("any", pkg.endpoint("broken").orElseThrow().returns().toString());
         assertEquals("array<any>", pkg.object("list").orElseThrow().attributes().get(1).type().toString());
     }
+
+    /**
+     * {"array": X} is the canonical way to write an array of X (spec: Generics, Application).
+     * It must behave exactly like the legacy [[X]] form.
+     */
+    @Test
+    void arrayApplicationBehavesLikeLegacyForm() throws Exception {
+        String[][] pairs = {
+                {"{ \"array\": \"string\" }", "[[\"string\"]]"},
+                {"{ \"array\": \"object.user\" }", "[[\"object.user\"]]"},
+                {"{ \"array\": [\"string\", \"null\"] }", "[[\"string\", \"null\"]]"},
+                {"{ \"array\": \"T\" }", "[[\"T\"]]"},
+                {"{ \"array\": { \"array\": \"string\" } }", "[[[\"string\"]]]"},
+                {"{ \"array\": { \"object.page\": \"object.user\" } }", "[[{ \"object.page\": \"object.user\" }]]"},
+                {"{ \"object.page\": { \"array\": \"object.user\" } }", "{ \"object.page\": [[\"object.user\"]] }"},
+                {"[{ \"array\": \"string\" }, \"null\"]", "[[\"string\"], \"null\"]"},
+        };
+        for (String[] c : pairs) {
+            Type a = parse(c[0]);
+            Type l = parse(c[1]);
+            assertEquals(l.toString(), a.toString(), c[0]);
+            assertEquals(l.format("base"), a.format("base"), c[0]);
+            assertEquals(l.format("compact"), a.format("compact"), c[0]);
+            assertEquals(l.objectNames(), a.objectNames(), c[0]);
+            assertEquals(l.union().size(), a.union().size(), c[0]);
+        }
+    }
+
+    @Test
+    void arrayApplicationFormats() throws Exception {
+        assertParses("{ \"array\": \"string\" }", "array<string>");
+        assertParses("{ \"array\": \"object.user\" }", "array<object.user>");
+        assertParses("{ \"array\": [\"string\", \"number\"] }", "array<string|number>");
+        assertParses("{ \"array\": { \"array\": \"string\" } }", "array<array<string>>");
+        assertParses("{ \"array\": { \"object.page\": \"object.user\" } }", "array<object.page<object.user>>");
+        assertParses("{ \"object.page\": { \"array\": \"object.user\" } }", "object.page<array<object.user>>");
+        assertParses("{ \"array\": \"T\" }", "array<any>");
+        assertParses("[{ \"array\": \"string\" }, \"null\"]", "array<string>|null");
+        assertParses("[\"array\", { \"array\": \"string\" }]", "array|array<string>");
+    }
+
+    @Test
+    void arrayApplicationShape() throws Exception {
+        Type t = parse("{ \"array\": \"object.user\" }");
+        assertEquals(1, t.union().size());
+        TypeAlt alt = t.union().get(0);
+        assertEquals("array", alt.base());
+        assertNull(alt.refinement());
+        assertNotNull(alt.of());
+        assertEquals("object.user", alt.of().toString());
+        assertNull(alt.arg());
+        assertNull(alt.malformed());
+        assertFalse(alt.param());
+        assertTrue(t.hasBase("array"));
+        assertFalse(t.hasBareArray());
+        assertEquals("array", t.format("base"));
+
+        // T survives as the element of an array application.
+        assertTrue(parse("{ \"array\": \"T\" }").union().get(0).of().union().get(0).param());
+    }
+
+    @Test
+    void arrayApplicationObjectNames() throws Exception {
+        assertEquals(List.of("user"), parse("{ \"array\": \"object.user\" }").objectNames());
+        assertEquals(List.of("page", "user"), parse("{ \"array\": { \"object.page\": \"object.user\" } }").objectNames());
+        assertEquals(List.of("page", "user"), parse("{ \"object.page\": { \"array\": \"object.user\" } }").objectNames());
+        assertEquals(List.of("user"), parse("{ \"array\": { \"array\": \"object.user\" } }").objectNames());
+    }
+
+    @Test
+    void arrayApplicationValidates() throws Exception {
+        Type strings = parse("{ \"array\": \"string\" }");
+        assertTrue(strings.valid(List.of("a", "b")));
+        assertTrue(strings.valid(List.of()));
+        assertFalse(strings.valid(List.of(1)));
+        assertFalse(strings.valid("a"));
+        assertFalse(strings.valid(null));
+
+        Type mixed = parse("{ \"array\": [\"string\", \"number\"] }");
+        assertTrue(mixed.valid(List.of("a", 1)));
+        assertFalse(mixed.valid(List.of(true)));
+
+        Type nested = parse("{ \"array\": { \"array\": \"number\" } }");
+        assertTrue(nested.valid(List.of(List.of(1), List.of())));
+        assertFalse(nested.valid(List.of(List.of("a"))));
+    }
+
+    /** Everything malformed before stays malformed, for the same reasons; only the key "array" changed meaning. */
+    @Test
+    void malformedArrayApplicationsResolveToAny() throws Exception {
+        String[][] cases = {
+                {"{ \"array\": \"string\", \"object.a\": \"string\" }", TypeAlt.MALFORMED_KEY_COUNT},
+                {"{ \"array\": 5 }", TypeAlt.MALFORMED_ARGUMENT},
+                {"{ \"arrays\": \"string\" }", TypeAlt.MALFORMED_KEY_PREFIX},
+                {"{ \"array.x\": \"string\" }", TypeAlt.MALFORMED_KEY_PREFIX},
+                {"{ \"Array\": \"string\" }", TypeAlt.MALFORMED_KEY_PREFIX},
+        };
+        for (String[] c : cases) {
+            Type t = parse(c[0]);
+            assertEquals(1, t.union().size(), c[0]);
+            TypeAlt alt = t.union().get(0);
+            assertEquals("any", alt.base(), c[0]);
+            assertEquals(c[1], alt.malformed(), c[0]);
+            assertTrue(t.valid("anything"), c[0]);
+        }
+    }
+
+    /** Spec: a union of one entry is that entry. The model already holds one alternative either way; this pins it. */
+    @Test
+    void unionOfOneEntryIsThatEntry() throws Exception {
+        assertEquals(1, parse("[\"string\"]").union().size());
+        assertEquals("string", parse("[\"string\"]").format("base"));
+        assertEquals("email", parse("[\"string.email\"]").format("compact"));
+        assertEquals("string.email", parse("[\"string.email\"]").toString());
+        assertTrue(parse("[\"T\"]").union().get(0).param());
+        assertEquals("array", parse("[{ \"array\": \"string\" }]").format("base"));
+        assertEquals(1, parse("[{ \"array\": \"string\" }]").union().size());
+        // The legacy array shorthand is not a one-entry union: [["x"]] is still array<x>.
+        assertParses("[[\"string\"]]", "array<string>");
+        // Unions of more than one entry are unchanged.
+        assertEquals(2, parse("[\"string\", \"null\"]").union().size());
+    }
+
+    @Test
+    void packageWithArrayApplicationLoads() throws Exception {
+        String json = """
+                {
+                  "base_url": "https://api.example.com/",
+                  "endpoints": [
+                    { "name": "get-comments", "returns": { "array": "object.comment" }, "arguments": [] }
+                  ],
+                  "objects": [
+                    { "name": "comment", "attributes": [
+                      { "name": "id", "type": "string.uuid" },
+                      { "name": "message", "type": "string" },
+                      { "name": "replies", "type": { "array": "object.comment" } }
+                    ] }
+                  ]
+                }
+                """;
+        Package pkg = Json.MAPPER.readValue(json, Package.class);
+        assertEquals("array<object.comment>", pkg.endpoint("get-comments").orElseThrow().returns().toString());
+        assertEquals("array<object.comment>", pkg.object("comment").orElseThrow().attributes().get(2).type().toString());
+    }
 }
