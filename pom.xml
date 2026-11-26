@@ -11,6 +11,30 @@
 
   <name>webfunction-java</name>
   <description>A Java client library for the Web Function protocol (webfunction.org)</description>
+  <url>https://github.com/webfunction-protocol/webfunction-java</url>
+
+  <licenses>
+    <license>
+      <name>MIT License</name>
+      <url>https://opensource.org/licenses/MIT</url>
+      <distribution>repo</distribution>
+    </license>
+  </licenses>
+
+  <developers>
+    <developer>
+      <id>webfunction-protocol</id>
+      <name>Web Function Protocol contributors</name>
+      <url>https://github.com/webfunction-protocol</url>
+    </developer>
+  </developers>
+
+  <scm>
+    <connection>scm:git:https://github.com/webfunction-protocol/webfunction-java.git</connection>
+    <developerConnection>scm:git:ssh://git@github.com/webfunction-protocol/webfunction-java.git</developerConnection>
+    <url>https://github.com/webfunction-protocol/webfunction-java</url>
+    <tag>HEAD</tag>
+  </scm>
 
   <properties>
     <maven.compiler.source>17</maven.compiler.source>
@@ -57,4 +81,78 @@
       </plugin>
     </plugins>
   </build>
+
+  <!--
+    Release-only, so an ordinary `mvn test` stays fast and needs no GPG key.
+    Everything Maven Central requires beyond the metadata above lives here:
+    a sources jar, a javadoc jar, a detached GPG signature per artifact, and
+    the upload to the Central Portal. Run with `mvn -Prelease deploy`.
+    Authentication uses the <server> entry with id "central" in ~/.m2/settings.xml
+    (a Central Portal user token, not the portal login).
+  -->
+  <profiles>
+    <profile>
+      <id>release</id>
+      <build>
+        <plugins>
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-source-plugin</artifactId>
+            <version>3.3.1</version>
+            <executions>
+              <execution>
+                <id>attach-sources</id>
+                <goals>
+                  <goal>jar-no-fork</goal>
+                </goals>
+              </execution>
+            </executions>
+          </plugin>
+
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-javadoc-plugin</artifactId>
+            <version>3.11.2</version>
+            <executions>
+              <execution>
+                <id>attach-javadocs</id>
+                <goals>
+                  <goal>jar</goal>
+                </goals>
+              </execution>
+            </executions>
+          </plugin>
+
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-gpg-plugin</artifactId>
+            <version>3.2.7</version>
+            <executions>
+              <execution>
+                <id>sign-artifacts</id>
+                <phase>verify</phase>
+                <goals>
+                  <goal>sign</goal>
+                </goals>
+              </execution>
+            </executions>
+          </plugin>
+
+          <plugin>
+            <groupId>org.sonatype.central</groupId>
+            <artifactId>central-publishing-maven-plugin</artifactId>
+            <version>0.11.0</version>
+            <extensions>true</extensions>
+            <configuration>
+              <publishingServerId>central</publishingServerId>
+              <!-- Upload and validate, but leave the final "Publish" click to a human in the
+                   Central Portal: a published release can never be removed or reused. -->
+              <autoPublish>false</autoPublish>
+              <waitUntil>validated</waitUntil>
+            </configuration>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
+  </profiles>
 </project>

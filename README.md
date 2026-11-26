@@ -146,12 +146,11 @@ library other projects will depend on.
 
 ## Development
 
-This project targets Maven + real Jackson/JUnit 5 from Maven Central
-(see `pom.xml`). The development sandbox used to build this couldn't reach
-Maven Central, so it was actually compiled and tested with the
-apt-packaged Jackson 2.14 and JUnit 5.10 jars as a stand-in - functionally
-equivalent for verification purposes, but `mvn test` against the real
-declared versions is the authoritative check.
+This project targets Maven with Jackson 2.17.2 and JUnit 5.10.2 (see
+`pom.xml`), and the test suite passes against those declared versions
+(`mvn test`). Early development was done in a sandbox that couldn't reach
+Maven Central, using apt-packaged Jackson 2.14 and JUnit 5.10 jars as a
+stand-in; that is no longer the reference check.
 
 ```
 mvn test
